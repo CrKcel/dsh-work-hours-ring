@@ -1,0 +1,5 @@
+# Bundle layer for @local/dsh-work-hours-ring.
+# Inserted into the desktop profile's composed plugin tree.
+- insert:
+    - id: work-hours-ring
+      name: '@local/dsh-work-hours-ring'
