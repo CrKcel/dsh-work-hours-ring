@@ -13,19 +13,16 @@
   "files": [
     "index.js",
     "client.js",
-    "client.source.js",
-    "build.mjs",
-    "worktime.js",
-    "holiday-source.js",
     "cordis.patch.yml",
     "icon.svg",
     "README.md"
   ],
   "scripts": {
     "build": "node build.mjs",
-    "test": "node build.mjs && node test/worktime.test.js && node test/client.test.js"
+    "test": "node test/artifact.test.js && node test/worktime.test.js && node test/client.test.js"
   },
   "dsh": {
+    "manifestVersion": 1,
     "bundle": {
       "patch": "./cordis.patch.yml"
     },
@@ -33,6 +30,13 @@
       "platform": "web",
       "immediately": true
     }
+  },
+  "engines": {
+    "dsh": ">=0.2.0-rc.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CrKcel/dsh-work-hours-ring.git"
   },
   "devDependencies": {
     "chinese-days": "^1.5.9"
