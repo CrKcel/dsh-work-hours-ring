@@ -1,13 +1,24 @@
 /**
  * Pure Beijing-time ("北京时间", UTC+8) working-hours model.
  *
- * A working day is Monday–Friday that is not a Chinese statutory holiday. Its
- * working periods are 09:00–12:00 and 14:00–18:00; every other instant is idle
- * time — weekends, holidays, the lunch break, and the hours outside those two
+ * A working day is a day the Chinese official calendar marks as a workday.
+ * Since 2026 the State Council publishes a year's holiday *and* makeup-workday
+ * (调休上班) arrangement only in the preceding autumn, so the model reads the
+ * calendar from a pluggable **holiday source** instead of a hand-kept list:
+ * `holiday-source.js` supplies the real one (the `chinese-days` npm package,
+ * inlined into the browser bundle by `build.mjs`), and tests may pass their own.
+ *
+ * When the source has no data for a year, the model falls back to the fixed-date
+ * statutory holidays — New Year's Day, Labour Day, and National Day — plus the
+ * plain Monday–Friday rule.
+ *
+ * Its working periods are 09:00–12:00 and 14:00–18:00; every other instant is
+ * idle time — non-workdays, the lunch break, and the hours outside those two
  * periods.
  *
  * @module worktime
  */
+import { createHolidaySource } from "./holiday-source.js";
 
 /** Beijing is UTC+8 with no daylight saving, so the offset is a constant. */
 const BEIJING_OFFSET_MINUTES = 8 * 60;
@@ -22,39 +33,17 @@ const WORK_PERIODS = [
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Off-weekday holiday windows, inclusive: the days the State Council actually
- * grants off. Weekends are idle regardless, and makeup workdays (调休上班) fall
- * on weekends, so they need no entry — under the requested rule a weekend is
- * always idle.
- *
- * 2026 is the full 《国务院办公厅关于2026年部分节假日安排的通知》 (published
- * 2025-11). Later years are not announced yet, so `fallbackHolidays()` covers
- * their fixed-date holidays only; add `YYYY-MM-DD` rows here, or set
- * `holidays` in the plugin config, once a year's notice is out.
+ * How many days ahead `nextWorkStart` will walk. A year of statutory breaks is
+ * far shorter than this, so the search always lands on a working day.
  */
-const HOLIDAYS = [
-	// 2026 · 元旦
-	"2026-01-01", "2026-01-02",
-	// 2026 · 春节
-	"2026-02-16", "2026-02-17", "2026-02-18", "2026-02-19", "2026-02-20", "2026-02-23",
-	// 2026 · 清明节
-	"2026-04-06",
-	// 2026 · 劳动节
-	"2026-05-01", "2026-05-04", "2026-05-05",
-	// 2026 · 端午节
-	"2026-06-19",
-	// 2026 · 中秋节
-	"2026-09-25",
-	// 2026 · 国庆节 (10-01 … 10-08; 10-09 is the return-to-work Friday)
-	"2026-10-01", "2026-10-02", "2026-10-05", "2026-10-06", "2026-10-07", "2026-10-08"
-];
+const SEARCH_HORIZON_DAYS = 370;
 
 /** Per-year memo behind `fallbackHolidays`, keyed by four-digit year. */
 const FALLBACK_HOLIDAY_CACHE = new Map();
 
 /**
- * Fixed-date statutory holidays for a year with no announcement yet: New Year's
- * Day (1 day), Labour Day (3 days), and National Day (3 days).
+ * Fixed-date statutory holidays for a year the holiday source does not cover:
+ * New Year's Day (1 day), Labour Day (3 days), and National Day (3 days).
  *
  * The keys are built once per year: `isWorkingDay` consults them for every
  * candidate day a `nextWorkStart` search walks, so rebuilding the list per call
@@ -77,16 +66,24 @@ const WEEKDAY_LABELS = ["周日", "周一", "周二", "周三", "周四", "周�
 
 /**
  * Normalize a calendar source into a lookup set.
- * @param source - `{ holidays?: string[] }`; a missing list falls back to the
- *   built-in `HOLIDAYS`.
+ *
+ * @param options - optional calendar definition.
+ * @param options.holidays - extra dates to force idle, in `YYYY-MM-DD`; they win
+ *   over the holiday source, so a caller can patch a single day without knowing
+ *   which source is underneath.
+ * @param options.source - holiday source; defaults to the real one built from
+ *   `chinese-days`. Pass `null` to opt out and use the fixed-date fallback only.
  * @returns the frozen calendar.
  */
-function createCalendar(source) {
-	return Object.freeze({ holidays: new Set(source?.holidays ?? HOLIDAYS) });
+function createCalendar(options = {}) {
+	return Object.freeze({
+		extraHolidays: new Set(options.holidays ?? []),
+		source: options.source === undefined ? createHolidaySource() : options.source
+	});
 }
 
-/** The built-in calendar, shared by every call that does not receive one. */
-const DEFAULT_CALENDAR = createCalendar();
+/** The built-in calendar: the real holiday source, no per-day overrides. */
+const DEFAULT_CALENDAR = createCalendar({ source: createHolidaySource() });
 
 /**
  * Read the Beijing wall clock for an instant.
@@ -124,15 +121,39 @@ function dateKey(parts) {
 }
 
 /**
- * Test whether a Beijing date is a working day: Monday–Friday and not a holiday.
+ * Test whether a Beijing date is a working day.
+ *
+ * A per-day override wins. Otherwise a year the source covers is answered
+ * *entirely* by the source: makeup workdays (调休上班) fall on weekends and are
+ * genuinely working days, so a Monday–Friday test must not be applied first. Only a
+ * year the source does not cover falls back to Monday–Friday minus the fixed-date
+ * holidays.
  * @param parts - Beijing calendar fields.
- * @param calendar - calendar lookup set.
+ * @param calendar - calendar lookup.
  * @returns true for a working day.
  */
 function isWorkingDay(parts, calendar) {
-	if (parts.weekday === 0 || parts.weekday === 6) return false;
 	const key = dateKey(parts);
-	return !calendar.holidays.has(key) && !fallbackHolidays(parts.year).has(key);
+	if (calendar.extraHolidays.has(key)) return false;
+	const source = calendar.source;
+	if (source !== null && source.yearCovered(parts.year)) return source.isWorkday(key);
+	if (parts.weekday === 0 || parts.weekday === 6) return false;
+	return !fallbackHolidays(parts.year).has(key);
+}
+
+/**
+ * Name of the statutory holiday a Beijing date belongs to.
+ *
+ * Used to enrich the tooltip while the surrounding gap is a holiday. A plain
+ * weekend, and any date outside the holiday source's data, has no name.
+ * @param parts - Beijing calendar fields.
+ * @param calendar - calendar lookup.
+ * @returns the holiday name, or `null`.
+ */
+function holidayLabel(parts, calendar) {
+	const source = calendar.source;
+	if (source === null) return null;
+	return source.holidayName(dateKey(parts));
 }
 
 /**
@@ -147,7 +168,7 @@ function inWorkPeriod(minuteOfDay) {
 /**
  * Describe the working state at an instant.
  * @param nowMs - epoch milliseconds; defaults to the current time.
- * @param calendar - calendar lookup set; defaults to the built-in list.
+ * @param calendar - calendar lookup; defaults to the built-in one.
  * @returns `{ working, minuteOfDay, weekday }`.
  */
 function stateAt(nowMs = Date.now(), calendar = DEFAULT_CALENDAR) {
@@ -159,14 +180,14 @@ function stateAt(nowMs = Date.now(), calendar = DEFAULT_CALENDAR) {
 /**
  * Find the next instant work starts.
  * @param nowMs - reference instant.
- * @param calendar - calendar lookup set.
+ * @param calendar - calendar lookup.
  * @returns `{ atMs, sameDay }` — the next period start and whether it is still
  *   the reference day in Beijing.
  */
 function nextWorkStart(nowMs, calendar = DEFAULT_CALENDAR) {
 	const today = beijingParts(nowMs);
 	const dayStart = beijingDayStart(nowMs);
-	for (let offset = 0; offset <= 370; offset += 1) {
+	for (let offset = 0; offset <= SEARCH_HORIZON_DAYS; offset += 1) {
 		const start = dayStart + offset * DAY_MS;
 		const parts = beijingParts(start + 60_000);
 		if (!isWorkingDay(parts, calendar)) continue;
@@ -182,7 +203,7 @@ function nextWorkStart(nowMs, calendar = DEFAULT_CALENDAR) {
 /**
  * Find the next instant work ends.
  * @param nowMs - reference instant inside a working period.
- * @param calendar - calendar lookup set.
+ * @param calendar - calendar lookup.
  * @returns epoch milliseconds of the end of the current working period.
  */
 function nextWorkEnd(nowMs, calendar = DEFAULT_CALENDAR) {
@@ -237,13 +258,28 @@ function clockText(atMs) {
 }
 
 /**
+ * Describe the holiday gap a next-start instant belongs to.
+ *
+ * The holiday name is read from the *previous* day: a break's last day carries
+ * its own name, whereas the working day it returns on carries none.
+ * @param atMs - next-start instant.
+ * @param calendar - calendar lookup.
+ * @returns ` （春节）`-style suffix, or `""` outside a named holiday.
+ */
+function holidaySuffix(atMs, calendar) {
+	const label = holidayLabel(beijingParts(atMs - DAY_MS), calendar);
+	return label === null ? "" : `（${label}）`;
+}
+
+/**
  * Build the ring's hover text for the current state.
  *
  * While a working period is active the text counts down to its end. While idle
  * it counts up to the next start, dropping the date when that start is still
- * today (before work or the lunch break) and naming it otherwise.
+ * today (before work or the lunch break), naming it otherwise, and naming the
+ * holiday that caused the wait.
  * @param nowMs - reference instant; defaults to the current time.
- * @param calendar - calendar lookup set; defaults to the built-in list.
+ * @param calendar - calendar lookup; defaults to the built-in one.
  * @returns the tooltip text.
  */
 function tooltipText(nowMs = Date.now(), calendar = DEFAULT_CALENDAR) {
@@ -252,13 +288,13 @@ function tooltipText(nowMs = Date.now(), calendar = DEFAULT_CALENDAR) {
 	const next = nextWorkStart(nowMs, calendar);
 	const remaining = durationText(next.atMs - nowMs);
 	if (next.sameDay) return `距离上班还有 ${remaining}`;
-	return `下次上班：${dateText(next.atMs)} ${clockText(next.atMs)}（还有 ${remaining}）`;
+	return `下次上班：${dateText(next.atMs)} ${clockText(next.atMs)}${holidaySuffix(next.atMs, calendar)}（还有 ${remaining}）`;
 }
 
 export {
 	BEIJING_OFFSET_MINUTES,
 	DAY_MS,
-	HOLIDAYS,
+	SEARCH_HORIZON_DAYS,
 	WORK_PERIODS,
 	beijingDayStart,
 	beijingParts,
@@ -266,6 +302,8 @@ export {
 	createCalendar,
 	dateText,
 	durationText,
+	fallbackHolidays,
+	holidayLabel,
 	inWorkPeriod,
 	isWorkingDay,
 	nextWorkEnd,

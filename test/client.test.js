@@ -130,4 +130,34 @@ assert.ok(client.includes("function tooltipText("), "the artifact inlines the ti
 assert.ok(!client.includes("// __WORKTIME_MODEL__"), "the marker is consumed by the build");
 process.stdout.write("ok   artifact inlines the tested time model\n");
 
+// 8. The holiday package is vendored into the artifact, not fetched at runtime.
+assert.ok(client.includes("chinese-days@"), "the artifact records the vendored package version");
+assert.ok(client.includes("const chineseDays = (function ()"), "the package is evaluated into a private binding");
+assert.ok(client.includes("BROWSER_COVERED_YEARS"), "the covered years are injected at build time");
+assert.ok(/BROWSER_COVERED_YEARS = \[[^\]]*\b2026\b/.test(client), "the injected range reaches 2026");
+assert.ok(!/^\s*import\s/m.test(client), "the vendored package never becomes an ES import");
+assert.ok(!client.includes("import.meta"), "no import.meta survives into a classic script");
+assert.ok(Buffer.byteLength(client) < 200_000, "the artifact stays a small, self-contained script");
+process.stdout.write("ok   chinese-days is vendored with build-time year coverage\n");
+
+// 9. End to end: the model the bundle actually ships follows the official calendar,
+//    including a 调休 makeup workday that the old hand-kept list called idle.
+{
+	const at = (text) => Date.parse(`${text}:00+08:00`);
+	const tooltipAt = (text) => {
+		const tree = loaded.WorkHoursRing({ now: at(text) });
+		return tree.props.label;
+	};
+	assert.equal(tooltipAt("2026-10-09T10:00"), "距离下班还有 2h", "a Friday inside National Day week is worked");
+	assert.equal(tooltipAt("2026-10-10T10:00"), "距离下班还有 2h", "the makeup Saturday is worked");
+	assert.equal(tooltipAt("2026-10-11T10:00"), "下次上班：10月12日（周一） 09:00（还有 23h）", "the Sunday after is idle");
+	assert.equal(
+		tooltipAt("2026-02-23T10:00"),
+		"下次上班：2月24日（周二） 09:00（春节）（还有 23h）",
+		"the last Spring Festival day is named in the tooltip"
+	);
+	assert.equal(tooltipAt("2026-10-08T10:00"), "距离下班还有 2h", "the day the hand-kept list over-counted is worked");
+	process.stdout.write("ok   the shipped model matches the official 2026 calendar\n");
+}
+
 process.stdout.write("\nall client checks passed\n");

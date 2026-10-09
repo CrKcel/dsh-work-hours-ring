@@ -7,9 +7,15 @@
  * Beijing working-hours model:
  *
  * - orange while a working period is active,
- * - blue while idle (weekends, holidays, lunch break, off hours).
+ * - blue while idle (non-workdays, holidays, lunch break, off hours).
  *
+ * "Working day" follows the official Chinese calendar, makeup workdays included,
+ * because the model reads the `chinese-days` npm package; see `holiday-source.js`.
  * Hovering it shows how long is left until work ends, or when work starts next.
+ *
+ * The WORKTIME_MODEL marker below is replaced by build.mjs with the inlined model
+ * (holiday-source.js, worktime.js, and the vendored package). No replacement text
+ * here may contain a dollar sign: it would be read as a replace() pattern.
  *
  * @module client
  */
@@ -116,11 +122,15 @@ const Ring = React.forwardRef(function Ring({ working, ...rest }, ref) {
 
 /**
  * The ring plus its hover text, re-read on a fixed interval.
+ *
+ * `now` is an injection point for tests: production omits it and the ring reads the
+ * real clock.
+ * @param props - optional `{ now }`, epoch milliseconds to use as the initial instant.
  * @returns the tooltip-wrapped ring.
  */
-function WorkHoursRing() {
+function WorkHoursRing({ now } = {}) {
 	const calendar = React.useMemo(() => createCalendar(), []);
-	const [nowMs, setNowMs] = React.useState(() => Date.now());
+	const [nowMs, setNowMs] = React.useState(() => now ?? Date.now());
 
 	React.useEffect(() => {
 		const timer = setInterval(() => setNowMs(Date.now()), TICK_MS);
