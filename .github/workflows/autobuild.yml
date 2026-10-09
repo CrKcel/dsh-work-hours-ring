@@ -1,0 +1,87 @@
+# Regenerate the committed bundle after a push.
+#
+# `client.js` is shipped to profiles as-is and the manifest has no `prepare` script
+# (see AGENTS.md): pnpm refuses to build a git-hosted dependency, so the artifact is
+# committed instead. This job keeps that artifact honest without making `npm run build`
+# a prerequisite for the contributor — it rebuilds on every push that can change the
+# bundle and commits the result back to the pushed branch. `npm test` still proves the
+# bytes are current, so the automatic commit is a convenience, not the source of truth.
+name: Auto-build bundle
+
+on:
+  push:
+    # Branch pushes only: a tag checkout is a detached HEAD, so the bot could not
+    # push its commit back onto anything.
+    branches: ["**"]
+    paths-ignore:
+      # Loop guard: the bot's own commit touches only client.js.
+      - client.js
+      # Prose cannot change the bundle.
+      - "**/*.md"
+      - .gitignore
+  workflow_dispatch:
+
+# The only workflow that writes, and only to the branch it was pushed from.
+permissions:
+  contents: write
+
+concurrency:
+  group: autobuild-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rebuild:
+    name: rebuild client.js
+    runs-on: ubuntu-latest
+    # Forks keep read-only tokens: their pushes are not ours to rewrite, and their
+    # contributors fix a stale bundle locally (CI on the pull request says how).
+    if: github.repository == 'CrKcel/dsh-work-hours-ring'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # NOTE: a push authenticated with the default GITHUB_TOKEN does not start
+          # another workflow run, so this job cannot feed itself. `[skip ci]` in the
+          # commit message is the second guard, for anyone who swaps in a PAT.
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v7
+        with:
+          # Pinned: the same inputs should produce the same bytes on every run.
+          node-version: "24"
+          cache: npm
+      - name: Install build inputs (chinese-days)
+        run: npm ci
+      - name: Rebuild the bundle and commit it when the sources moved on
+        run: |
+          set -euo pipefail
+
+          # Another push may have landed while this job was starting; work on its tip.
+          git fetch origin "${GITHUB_REF_NAME}"
+          git rebase "origin/${GITHUB_REF_NAME}"
+
+          # Run after the rebase so the bytes come from the newest sources.
+          npm run build
+
+          if git diff --quiet -- client.js; then
+            echo "client.js already matches the sources; nothing to commit."
+            exit 0
+          fi
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'chore(build): regenerate client.js [skip ci]' -- client.js
+
+          # A push can still race another run; rebuild on the new tip and retry.
+          for attempt in 1 2 3; do
+            if git push; then
+              exit 0
+            fi
+            echo "push rejected (attempt ${attempt}); rebasing onto the new tip"
+            git fetch origin "${GITHUB_REF_NAME}"
+            git rebase "origin/${GITHUB_REF_NAME}"
+            npm run build
+            git add client.js
+            git commit --amend --no-edit --allow-empty
+          done
+
+          echo "::error::could not push the regenerated client.js"
+          exit 1

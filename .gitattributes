@@ -1,0 +1,4 @@
+# `client.js` is compared byte for byte against a fresh build by
+# `test/artifact.test.js`, so its line endings must not depend on the platform that
+# checked it out. Normalize every text file to LF.
+* text=auto eol=lf

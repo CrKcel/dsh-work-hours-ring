@@ -12,6 +12,9 @@
 - `index.js` — Host half; pure UI.
 - `cordis.patch.yml` — bundle patch inserting the `work-hours-ring` row.
 - `test/` — Node scripts covering the time model, the bundle protocol, and the committed artifact's freshness.
+- `.github/workflows/ci.yml` — build + test on every pull request and on pushes to `main`.
+- `.github/workflows/autobuild.yml` — rebuilds and commits `client.js` after a push to any branch.
+- `.gitattributes` — forces LF so the committed bundle compares byte for byte on any platform.
 - `icon.svg`, `README.md` — plugin icon and user-facing docs.
 
 `package.json`'s `files` ships only the runtime half — `index.js`, `client.js`,
@@ -32,6 +35,9 @@ Rebuild `client.js` before manual check in the Harness. The artifact is self-con
 build inlines `node_modules/chinese-days` (~24 KB), so the profile needs no runtime dependency
 and the page makes no network request.
 
+A local `npm run build` is a convenience, not a requirement for a push: the `Auto-build bundle`
+workflow rebuilds on the runner and commits the result back (see Continuous Integration).
+
 Holiday data is a **build-time** input. To pick up a newly published year, bump
 `chinese-days` and rebuild — the build re-probes the shipped years and bakes the covered
 range into the bundle.
@@ -50,6 +56,31 @@ make the install command fail and demand a hand-written allowlist line per commi
 staleness guard runs at test time instead: `test/artifact.test.js` rebuilds and compares byte for
 byte, so `npm test` fails on a source edit that was not rebuilt and committed. Do not add
 `prepare`, `prepack`, or `prepublish` unless pnpm's git-hosted build policy changes.
+
+## Continuous Integration
+
+Two workflows, both `ubuntu-latest`, both starting from `npm ci` against the committed lockfile,
+so the vendored `chinese-days` bytes are the ones the bundle was built from:
+
+- `ci.yml` — `npm test` on every pull request and on pushes to `main`, across Node 22, 24 and 26.
+  It is the gate: `test/artifact.test.js` regenerates the bundle and compares byte for byte, so a
+  source edit committed without a rebuild is red here rather than stale inside a profile.
+- `autobuild.yml` — on a push to any branch, run `npm run build` and commit `client.js` back when
+  it changed, as `chore(build): regenerate client.js [skip ci]`. This is what makes the source
+  tree, not the checkout command, the thing a contributor commits. It runs only in
+  `CrKcel/dsh-work-hours-ring` (a fork's token is read-only and its history is not ours to
+  rewrite), so a fork-sourced PR still has to ship a rebuilt `client.js` to pass CI.
+
+The auto-commit cannot feed itself: the job's own commit changes only `client.js`, which is in
+`paths-ignore`, and a push authenticated with the default `GITHUB_TOKEN` starts no new workflow
+run; `[skip ci]` guards the case where a maintainer swaps in a personal token. Keep those three
+guards in place when editing the trigger. The job declares `permissions: contents: write` on
+purpose — the repository default is read-only, and the workflow file is allowed to escalate.
+
+One consequence worth knowing: `build.mjs` bakes `currentYear + 6` into the year coverage. On the
+first push of a new year the runner may therefore report the committed bundle as stale even
+though no source changed; the auto-commit is the intended repair, and `ci.yml` is red only until
+it lands.
 
 ## Testing
 
