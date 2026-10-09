@@ -150,10 +150,10 @@ process.stdout.write("ok   chinese-days is vendored with build-time year coverag
 	};
 	assert.equal(tooltipAt("2026-10-09T10:00"), "距离下班还有 2h", "a Friday inside National Day week is worked");
 	assert.equal(tooltipAt("2026-10-10T10:00"), "距离下班还有 2h", "the makeup Saturday is worked");
-	assert.equal(tooltipAt("2026-10-11T10:00"), "下次上班：10月12日（周一） 09:00（还有 23h）", "the Sunday after is idle");
+	assert.equal(tooltipAt("2026-10-11T10:00"), "下次上班：10月12日（周一）", "the Sunday after is idle");
 	assert.equal(
 		tooltipAt("2026-02-23T10:00"),
-		"下次上班：2月24日（周二） 09:00（春节）（还有 23h）",
+		"下次上班：2月24日（周二）（春节）",
 		"the last Spring Festival day is named in the tooltip"
 	);
 	assert.equal(tooltipAt("2026-10-08T10:00"), "距离下班还有 2h", "the day the hand-kept list over-counted is worked");

@@ -454,9 +454,10 @@ window.__ModuleLoader__.load({
 			 * Build the ring's hover text for the current state.
 			 *
 			 * While a working period is active the text counts down to its end. While idle
-			 * it counts up to the next start, dropping the date when that start is still
-			 * today (before work or the lunch break), naming it otherwise, and naming the
-			 * holiday that caused the wait.
+			 * it describes the next start with exactly one of two halves: a start still
+			 * today (before work or the lunch break) is a clock time plus the countdown,
+			 * because the day is already known; any later start is the date plus the
+			 * holiday that caused the wait, because the countdown would only be noise.
 			 * @param nowMs - reference instant; defaults to the current time.
 			 * @param calendar - calendar lookup; defaults to the built-in one.
 			 * @returns the tooltip text.
@@ -465,9 +466,8 @@ window.__ModuleLoader__.load({
 				if (stateAt(nowMs, calendar).working) return `距离下班还有 ${durationText(nextWorkEnd(nowMs, calendar) - nowMs)}`;
 
 				const next = nextWorkStart(nowMs, calendar);
-				const remaining = durationText(next.atMs - nowMs);
-				if (next.sameDay) return `距离上班还有 ${remaining}`;
-				return `下次上班：${dateText(next.atMs)} ${clockText(next.atMs)}${holidaySuffix(next.atMs, calendar)}（还有 ${remaining}）`;
+				if (next.sameDay) return `下次上班：${clockText(next.atMs)}（还有 ${durationText(next.atMs - nowMs)}）`;
+				return `下次上班：${dateText(next.atMs)}${holidaySuffix(next.atMs, calendar)}`;
 			}
 			return { BEIJING_OFFSET_MINUTES, DAY_MS, SEARCH_HORIZON_DAYS, WORK_PERIODS, beijingDayStart, beijingParts, clockText, createCalendar, dateText, durationText, fallbackHolidays, holidayLabel, inWorkPeriod, isWorkingDay, nextWorkEnd, nextWorkStart, splitDuration, stateAt, tooltipText };
 		})(chineseDays, "", undefined, __modules.holiday_source, __modules.worktime);

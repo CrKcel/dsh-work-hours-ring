@@ -28,35 +28,35 @@ const cases = [
 	// Friday 2026-10-09 is a working day; Saturday 10-10 is a makeup workday.
 	{ at: "2026-10-09T10:00", working: true, text: "距离下班还有 2h", why: "mid-morning" },
 	{ at: "2026-10-09T11:30", working: true, text: "距离下班还有 30min", why: "before lunch" },
-	{ at: "2026-10-09T12:00", working: false, text: "距离上班还有 2h", why: "lunch starts" },
-	{ at: "2026-10-09T12:30", working: false, text: "距离上班还有 1h 30min", why: "lunch middle" },
-	{ at: "2026-10-09T13:59", working: false, text: "距离上班还有 1min", why: "lunch end" },
+	{ at: "2026-10-09T12:00", working: false, text: "下次上班：14:00（还有 2h）", why: "lunch starts" },
+	{ at: "2026-10-09T12:30", working: false, text: "下次上班：14:00（还有 1h 30min）", why: "lunch middle" },
+	{ at: "2026-10-09T13:59", working: false, text: "下次上班：14:00（还有 1min）", why: "lunch end" },
 	{ at: "2026-10-09T14:00", working: true, text: "距离下班还有 4h", why: "afternoon starts" },
 	{ at: "2026-10-09T17:59", working: true, text: "距离下班还有 1min", why: "one minute left" },
-	{ at: "2026-10-09T18:00", working: false, text: "下次上班：10月10日（周六） 09:00（还有 15h）", why: "makeup Saturday follows" },
-	{ at: "2026-10-09T08:00", working: false, text: "距离上班还有 1h", why: "before work, same day" },
+	{ at: "2026-10-09T18:00", working: false, text: "下次上班：10月10日（周六）", why: "makeup Saturday follows" },
+	{ at: "2026-10-09T08:00", working: false, text: "下次上班：09:00（还有 1h）", why: "before work, same day" },
 	{ at: "2026-10-09T09:00", working: true, text: "距离下班还有 3h", why: "work starts" },
 	// 调休上班: an official makeup workday lands on a weekend and is worked.
 	{ at: "2026-10-10T10:00", working: true, text: "距离下班还有 2h", why: "makeup workday" },
-	{ at: "2026-10-10T12:30", working: false, text: "距离上班还有 1h 30min", why: "makeup workday lunch" },
-	{ at: "2026-10-11T10:00", working: false, text: "下次上班：10月12日（周一） 09:00（还有 23h）", why: "Sunday is idle" },
-	{ at: "2026-10-11T09:00", working: false, text: "下次上班：10月12日（周一） 09:00（还有 24h）", why: "weekend 09:00 is not work" },
+	{ at: "2026-10-10T12:30", working: false, text: "下次上班：14:00（还有 1h 30min）", why: "makeup workday lunch" },
+	{ at: "2026-10-11T10:00", working: false, text: "下次上班：10月12日（周一）", why: "Sunday is idle" },
+	{ at: "2026-10-11T09:00", working: false, text: "下次上班：10月12日（周一）", why: "weekend 09:00 is not work" },
 	// National Day 2026 runs 10-01 … 10-07, so the wait is named for the holiday and
 	// ends on the Thursday, not on the makeup Saturday that follows it.
-	{ at: "2026-10-01T10:00", working: false, text: "下次上班：10月8日（周四） 09:00（国庆节）（还有 167h）", why: "holiday Thursday" },
-	{ at: "2026-10-07T15:00", working: false, text: "下次上班：10月8日（周四） 09:00（国庆节）（还有 18h）", why: "last holiday day" },
+	{ at: "2026-10-01T10:00", working: false, text: "下次上班：10月8日（周四）（国庆节）", why: "holiday Thursday" },
+	{ at: "2026-10-07T15:00", working: false, text: "下次上班：10月8日（周四）（国庆节）", why: "last holiday day" },
 	// Spring Festival 2026 runs 02-15 … 02-23, with makeup workdays either side.
 	{ at: "2026-02-13T10:00", working: true, text: "距离下班还有 2h", why: "Friday before the break" },
-	{ at: "2026-02-13T18:00", working: false, text: "下次上班：2月14日（周六） 09:00（还有 15h）", why: "makeup Saturday follows" },
+	{ at: "2026-02-13T18:00", working: false, text: "下次上班：2月14日（周六）", why: "makeup Saturday follows" },
 	{ at: "2026-02-14T10:00", working: true, text: "距离下班还有 2h", why: "makeup workday before Spring Festival" },
-	{ at: "2026-02-15T10:00", working: false, text: "下次上班：2月24日（周二） 09:00（春节）（还有 215h）", why: "first holiday day, a Sunday" },
-	{ at: "2026-02-23T10:00", working: false, text: "下次上班：2月24日（周二） 09:00（春节）（还有 23h）", why: "last break day" },
+	{ at: "2026-02-15T10:00", working: false, text: "下次上班：2月24日（周二）（春节）", why: "first holiday day, a Sunday" },
+	{ at: "2026-02-23T10:00", working: false, text: "下次上班：2月24日（周二）（春节）", why: "last break day" },
 	{ at: "2026-02-24T10:00", working: true, text: "距离下班还有 2h", why: "back from Spring Festival" },
 	{ at: "2026-02-28T10:00", working: true, text: "距离下班还有 2h", why: "makeup workday after Spring Festival" },
 	// A year the package has no arrangement for uses the fixed-date fallback.
-	{ at: "2027-05-01T10:00", working: false, text: "下次上班：5月4日（周二） 09:00（还有 71h）", why: "fallback Labour Day" },
+	{ at: "2027-05-01T10:00", working: false, text: "下次上班：5月4日（周二）", why: "fallback Labour Day" },
 	{ at: "2027-05-04T10:00", working: true, text: "距离下班还有 2h", why: "fallback ends" },
-	{ at: "2027-01-01T10:00", working: false, text: "下次上班：1月4日（周一） 09:00（还有 71h）", why: "fallback New Year" }
+	{ at: "2027-01-01T10:00", working: false, text: "下次上班：1月4日（周一）", why: "fallback New Year" }
 ];
 
 let failed = 0;
